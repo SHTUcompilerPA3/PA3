@@ -18,8 +18,6 @@ static SymbolTable<Symbol, Symbol> attribtable;
 typedef SymbolTable<Symbol, method_class> MethodTable;
 static std::map<Symbol, MethodTable> methodtables;
 
-std::map<Symbol, Class_> m_classes;
-
 //////////////////////////////////////////////////////////////////////
 //
 // Symbols
@@ -92,7 +90,17 @@ static void initialize_constants(void)
 }
 
 
-
+/*
+constructor of ClassTable ,which construct a classm table for checking.
+It can detect class semantic errors:
+    (1)Redefinition of basic class.
+    (2)Redefinition of previously defined class.
+    (3)Class inherits Int || Str || SELF_TYPE || Bool .
+    (4)Class inherits from an undefined class.
+    (5)It contains cyclic inheritance.
+    (6)Class Main is not defined.
+**Contributor: youch
+*/
 ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) {
 
     install_basic_classes();
