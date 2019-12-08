@@ -7,6 +7,8 @@
 #include "stringtab.h"
 #include "symtab.h"
 #include "list.h"
+#include <map>
+#include <list>
 
 #define TRUE 1
 #define FALSE 0
@@ -24,15 +26,17 @@ private:
   int semant_errors;
   void install_basic_classes();
   ostream& error_stream;
-  /*a container to store classes*/
-  std::map<Symbol, Class_> m_classes;
-
 public:
   ClassTable(Classes);
   int errors() { return semant_errors; }
   ostream& semant_error();
   ostream& semant_error(Class_ c);
   ostream& semant_error(Symbol filename, tree_node *t);
+
+  /*a container to store classes*/
+  std::map<Symbol, Class_> m_classes;
+
+  std::list<Symbol> GetInheritancePath(Symbol);
 };
 
 

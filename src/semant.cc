@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <map>
+#include <list>
 #include "semant.h"
 #include "utilities.h"
 
@@ -320,15 +321,55 @@ void program_class::semant()
     initialize_constants();
 
     /* construct the class table, detect class semantic errors */
-    ClassTable *classtable = new ClassTable(classes);
+    classtable = new ClassTable(classes);
 
     if (classtable->errors()) {
         cerr << "Compilation halted due to static semantic errors." << endl;
         exit(1);
     }
 
+    /* construct the method table, detect method semantic errors in one class*/
+    construct_methodtables();
+
     //TODO:
     //(1) Pass through every method in every class, construct the methodtables and detect method semantic errors.
     //(2) Pass through every class, construct the symboltables, then check semantic errors in methods and decorate the AST.
+}
+
+/* construct the method table, detect method semantic errors in one class
+contributor: youch
+*/
+void program_class::construct_methodtables(){
+    for (std::map<Symbol, Class_>::iterator iter = classtable->m_classes.begin(); iter != classtable->m_classes.end(); ++iter) {
+        Symbol name = iter->first;
+        methodtables[name].enterscope();
+        Features curr_features = classtable->m_classes[name]->GetFeatures();
+        for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
+             Feature curr_feature = curr_features->nth(j);
+             if(curr_feature->ismethod()){
+                if(methodtables[name].probe(curr_feature->GetName())==NULL)
+                    curr_feature->AddToMethodTable(name);
+                else 
+                    classtable->semant_error(curr_class->get_filename(),curr_feature) << "Method "<<curr_feature->GetName()<<" is multiply defined." << std::endl;
+             }
+        }
+    }
+    if (classtable->errors()) {
+        cerr << "Compilation halted due to static semantic errors." << endl;
+        exit(1);
+    }
+}
+
+void method_class::AddToMethodTable(Symbol class_name) {methodtables[class_name].addid(name, new method_class(copy_Symbol(name), formals->copy_list(), copy_Symbol(return_type), expr->copy_Expression()));}
+void attr_class::AddToAttributeTable(Symbol class_name) {
+    if (name == self) {
+        classtable->semant_error(curr_class) << "Error! 'self' cannot be the name of an attribute in class " << curr_class->GetName() << std::endl;
+    }
+    if (attribtable.lookup(name) != NULL) {
+        classtable->semant_error(curr_class) << "Error! attribute '" << name << "' already exists!" << std::endl;
+        return;
+    }
+
+    attribtable.addid(name, new Symbol(type_decl));
 }
 

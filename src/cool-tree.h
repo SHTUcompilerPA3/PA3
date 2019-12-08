@@ -11,7 +11,7 @@
 
 #include "tree.h"
 #include "cool-tree.handcode.h"
-
+#include "semant.h"
 
 // define the class for phylum
 // define simple phylum - Program
@@ -55,6 +55,12 @@ public:
    tree_node *copy()		 { return copy_Feature(); }
    virtual Feature copy_Feature() = 0;
 
+   /*return whether a feature is a method or an attribute*/
+   virtual int ismethod () = 0;
+   virtual int isattribute () = 0;
+   virtual void AddToMethodTable(Symbol) = 0;
+   virtual void AddToAttributeTable(Symbol) = 0;
+   virtual Symbol GetName() = 0;
 #ifdef Feature_EXTRAS
    Feature_EXTRAS
 #endif
@@ -68,6 +74,7 @@ class Formal_class : public tree_node {
 public:
    tree_node *copy()		 { return copy_Formal(); }
    virtual Formal copy_Formal() = 0;
+   virtual Symbol GetType() = 0;
 
 #ifdef Formal_EXTRAS
    Formal_EXTRAS
@@ -140,6 +147,7 @@ public:
    }
    Program copy_Program();
    void dump(ostream& stream, int n);
+   void construct_methodtables();
 
 #ifdef Program_SHARED_EXTRAS
    Program_SHARED_EXTRAS
@@ -196,6 +204,12 @@ public:
    }
    Feature copy_Feature();
    void dump(ostream& stream, int n);
+   void AddToMethodTable(Symbol);
+   void AddToAttributeTable(Symbol){};
+   int ismethod () {return 1;};
+   int isattribute () {return 0;};
+   Symbol GetName(){return name;};
+   Formals GetFormals(){return formals;};
 
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
@@ -220,6 +234,11 @@ public:
    }
    Feature copy_Feature();
    void dump(ostream& stream, int n);
+   void AddToAttributeTable(Symbol);
+   void AddToMethodTable(Symbol){};
+   int ismethod () {return 0;};
+   int isattribute () {return 1;};
+   Symbol GetName(){return name;};
 
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
@@ -242,6 +261,7 @@ public:
    }
    Formal copy_Formal();
    void dump(ostream& stream, int n);
+   Symbol GetType(){return type_decl;};
 
 #ifdef Formal_SHARED_EXTRAS
    Formal_SHARED_EXTRAS
