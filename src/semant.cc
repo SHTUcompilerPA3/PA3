@@ -91,7 +91,7 @@ static void initialize_constants(void)
 
 
 /*
-constructor of ClassTable ,which construct a classm table for checking.
+constructor of ClassTable ,which construct a class table for checking.
 It can detect class semantic errors:
     (1)Redefinition of basic class.
     (2)Redefinition of previously defined class.
@@ -319,14 +319,16 @@ void program_class::semant()
 {
     initialize_constants();
 
-    /* ClassTable constructor may do some semantic analysis */
+    /* construct the class table, detect class semantic errors */
     ClassTable *classtable = new ClassTable(classes);
 
-    /* some semantic analysis code may go here */
-
     if (classtable->errors()) {
-	cerr << "Compilation halted due to static semantic errors." << endl;
-	exit(1);
+        cerr << "Compilation halted due to static semantic errors." << endl;
+        exit(1);
     }
+
+    //TODO:
+    //(1) Pass through every method in every class, construct the methodtables and detect method semantic errors.
+    //(2) Pass through every class, construct the symboltables, then check semantic errors in methods and decorate the AST.
 }
 
