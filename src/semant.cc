@@ -411,32 +411,32 @@ void attr_class::AddToAttributeTable(Symbol class_name) {
 /*type calculator for all type
 assign to: chenrong
 */
-Symbol assign_class::Type(){}
-Symbol static_dispatch_class::Type(){}
-Symbol dispatch_class::Type(){}
-Symbol cond_class::Type(){}
-Symbol loop_class::Type(){}
-Symbol typcase_class::Type(){}
-Symbol block_class::Type(){}
-Symbol let_class::Type(){}
+Symbol assign_class::Type(){return Object;}
+Symbol static_dispatch_class::Type(){return Object;}
+Symbol dispatch_class::Type(){return Object;}
+Symbol cond_class::Type(){return Object;}
+Symbol loop_class::Type(){return Object;}
+Symbol typcase_class::Type(){return Object;}
+Symbol block_class::Type(){return Object;}
+Symbol let_class::Type(){return Object;}
 Symbol plus_class::Type(){
     if(e1->Type()!=e2->Type())
         classtable->semant_error(curr_class->get_filename(),this)<<"non-"<<e1->Type()<<" arguments: "<<e1->Type()<<" + "<<e2->Type()<<std::endl;
     else
         return e1->Type();
 }
-Symbol sub_class::Type(){}
-Symbol mul_class::Type(){}
-Symbol divide_class::Type(){}
-Symbol neg_class::Type(){}
-Symbol lt_class::Type(){}
-Symbol eq_class::Type(){}
-Symbol leq_class::Type(){}
-Symbol comp_class::Type(){}
+Symbol sub_class::Type(){return Object;}
+Symbol mul_class::Type(){return Object;}
+Symbol divide_class::Type(){return Object;}
+Symbol neg_class::Type(){return Object;}
+Symbol lt_class::Type(){return Object;}
+Symbol eq_class::Type(){return Object;}
+Symbol leq_class::Type(){return Object;}
+Symbol comp_class::Type(){return Object;}
 Symbol int_const_class::Type(){return Int;}
-Symbol bool_const_class::Type(){}
-Symbol string_const_class::Type(){}
+Symbol bool_const_class::Type(){return Object;}
+Symbol string_const_class::Type(){return Object;}
 Symbol new__class::Type(){return type_name;}
 Symbol isvoid_class::Type(){return Bool;}
-Symbol no_expr_class::Type(){}
-Symbol object_class::Type(){}
+Symbol no_expr_class::Type(){return Object;}
+Symbol object_class::Type(){return Object;}
