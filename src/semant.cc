@@ -496,7 +496,7 @@ Symbol let_class::Type(){return Object;}
 Symbol plus_class::Type(){
     if(e1->Type()!=Int || e2->Type()!=Int){
         type=Object;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-"<<e1->Type()<<" arguments: "<<e1->Type()<<" + "<<e2->Type()<<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" + "<<e2->Type()<<std::endl;
     }
     else  type=Int;
     return type;
