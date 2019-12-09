@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <map>
+#include <set>
 #include <list>
 #include "semant.h"
 #include "utilities.h"
@@ -15,6 +16,7 @@ extern char *curr_filename;
 static Class_ curr_class = NULL;
 static ClassTable* classtable;
 static SymbolTable<Symbol, Symbol> attribtable;
+static SymbolTable<Symbol, Symbol> *attribtable_init;
 
 typedef SymbolTable<Symbol, method_class> MethodTable;
 static std::map<Symbol, MethodTable> methodtables;
@@ -330,10 +332,45 @@ void program_class::semant()
 
     /* construct the method table, detect method semantic errors in one class*/
     construct_methodtables();
-
     //TODO:
-    //(1) Pass through every method in every class, construct the methodtables and detect method semantic errors.
-    //(2) Pass through every class, construct the symboltables, then check semantic errors in methods and decorate the AST.
+    //(1) Pass through every method in every class, construct the methodtables and detect method semantic errors(Solved).
+    //(2) Pass through every class, construct the symboltables, then check semantic errors in methods and decorate the AST.(Solved)
+    //(3) detect method semantic errors while inheriting.
+
+    /* construct the attribute table, explore and decorate the AST*/
+    for (int i = classes->first(); classes->more(i); i = classes->next(i)) {
+        curr_class = classes->nth(i);
+        attribtable_init=new SymbolTable<Symbol, Symbol>;
+        attribtable_init->enterscope();
+
+        std::list<Symbol> path = classtable->GetAllParents(curr_class->GetName());
+        for (std::list<Symbol>::iterator iter = path.begin(); iter != path.end(); iter++) {
+            Class_ the_class = classtable->m_classes[*iter];
+            Features curr_features = the_class->GetFeatures();
+            attribtable.enterscope();
+            for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
+                Feature curr_feature = curr_features->nth(j);
+                if(curr_feature->isattribute()) curr_feature->AddToAttributeTable(the_class->GetName());
+                if(curr_feature->isattribute()&&the_class->GetName()!=curr_class->GetName()) attribtable_init->addid(curr_feature->GetName(), new Symbol(curr_feature->GetType()));
+            }
+        }
+        
+        curr_class = classes->nth(i);
+        Features curr_features = curr_class->GetFeatures();
+
+        for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
+            Feature curr_feature = curr_features->nth(j);
+            curr_feature->Explore();
+        }
+
+        for (int j = 0; j < path.size(); ++j) {
+            attribtable.exitscope();
+        }
+    }
+    if (classtable->errors()) {
+        cerr << "Compilation halted due to static semantic errors." << endl;
+        exit(1);
+    }
 }
 
 /* construct the method table, detect method semantic errors in one class
@@ -351,42 +388,13 @@ void program_class::construct_methodtables(){
              }
         }
     }
-    for (int i = classes->first(); classes->more(i); i = classes->next(i)) {
-        curr_class = classes->nth(i);
-
-        // Get the inheritance path, add all the attributes.
-        // std::list<Symbol> path = classtable->GetInheritancePath(curr_class->GetName());
-        // for (std::list<Symbol>::iterator iter = path.begin(); iter != path.end(); iter++) {
-        //     curr_class = classtable->m_classes[*iter];
-            Features curr_features = curr_class->GetFeatures();
-            attribtable.enterscope();
-            for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
-                Feature curr_feature = curr_features->nth(j);
-                curr_feature->AddToAttributeTable(curr_class->GetName());
-            }
-        // }
-        
-        curr_class = classes->nth(i);
-        //Features curr_features = curr_class->GetFeatures();
-
-        // Check all features.
-
-
-        // for (int j = 0; j < path.size(); ++j) {
-             attribtable.exitscope();
-        // }
-    }
-    if (classtable->errors()) {
-        cerr << "Compilation halted due to static semantic errors." << endl;
-        exit(1);
-    }
 }
 
 /*add the current method to method table, can detect multiply-defined method in one class.
 contributor: youch
 */
 void method_class::AddToMethodTable(Symbol class_name) {
-    if(methodtables[name].probe(this->GetName())==NULL)
+    if(methodtables[class_name].probe(this->GetName())==NULL)
         methodtables[class_name].addid(name, new method_class(copy_Symbol(name), formals->copy_list(), copy_Symbol(return_type), expr->copy_Expression()));
     else 
         classtable->semant_error(curr_class->get_filename(),this) << "Method "<<this->GetName()<<" is multiply defined." << std::endl;
@@ -397,16 +405,82 @@ contributor: youch
 */
 void attr_class::AddToAttributeTable(Symbol class_name) {
     if (name == self) {
-        classtable->semant_error(curr_class->get_filename(),this) << "'self' cannot be the name of an attribute." << curr_class->GetName() << std::endl;
+        if(class_name==curr_class->GetName())
+            classtable->semant_error(curr_class->get_filename(),this) << "'self' cannot be the name of an attribute."  << std::endl;
         return;
     }
-    if (attribtable.lookup(name) != NULL) {
-        classtable->semant_error(curr_class->get_filename(),this) << "Attribute " << name << " is multiply defined in class." << std::endl;
-        return;
+    if (attribtable.lookup(name) != NULL ) {
+        if(attribtable_init->probe(name)==NULL){
+            classtable->semant_error(curr_class->get_filename(),this) << "Attribute " << name << " is multiply defined in class." << class_name <<curr_class->GetName()<<std::endl;
+            return;
+        }
+        else
+            classtable->semant_error(curr_class->get_filename(),this) << "Attribute " << name << " is an attribute of an inherited class." << std::endl;
+            return;
     }
 
     attribtable.addid(name, new Symbol(type_decl));
 }
+
+/*get all classes inherited by the input class(including itself)
+contributor:youch
+*/
+std::list<Symbol> ClassTable::GetAllParents(Symbol type) {
+    if (type == SELF_TYPE) {
+        type = curr_class->GetName();
+    }
+
+    std::list<Symbol> parents;
+
+    // note that Object's father is No_class
+    for (; type != No_class; type = m_classes[type]->GetParent()) {
+        parents.push_front(type); 
+    }
+
+    return parents;
+}
+
+/*explore each feature, calculate the type of every expreesion, check semantic errors, decorate the AST
+contributor: youch
+*/
+void method_class::Explore() {
+
+    if (classtable->m_classes.find(return_type) == classtable->m_classes.end() && return_type != SELF_TYPE) {
+        classtable->semant_error(curr_class) << "Error! return type " << return_type << " doesn't exist." << std::endl;
+    }
+    attribtable.enterscope();
+    std::set<Symbol> used_names;
+    for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
+        Symbol name = formals->nth(i)->GetName();
+        if (used_names.find(name) != used_names.end()) {
+            classtable->semant_error(curr_class) << "Error! formal name duplicated. " << std::endl;
+        } else {
+            used_names.insert(name);
+        }
+
+        Symbol type = formals->nth(i)->GetType();
+        if (classtable->m_classes.find(type) == classtable->m_classes.end()) {
+            classtable->semant_error(curr_class) << "Error! Cannot find class " << type << std::endl;
+        }
+        if (formals->nth(i)->GetName() == self) {
+            classtable->semant_error(curr_class) << "Error! self in formal " << std::endl;
+        }
+        attribtable.addid(formals->nth(i)->GetName(), new Symbol(formals->nth(i)->GetType()));
+    }
+    
+    Symbol expr_type = expr->Type();
+    // if (classtable->CheckInheritance(return_type, expr_type) == false) {
+    //     classtable->semant_error(curr_class) << "Error! return type is not ancestor of expr type. " << std::endl;
+    // }
+    attribtable.exitscope();
+}
+void attr_class::Explore() {
+    if (init->Type() != type_decl) {
+        classtable->semant_error(curr_class->get_filename(),this) << "Inferred type "<<init->Type()<<" of initialization of attribute "<<name<<" does not conform to declared type "<<type_decl<<"." << std::endl;
+    }
+}
+
+
 
 /*type calculator for all type
 assign to: chenrong
@@ -420,10 +494,12 @@ Symbol typcase_class::Type(){return Object;}
 Symbol block_class::Type(){return Object;}
 Symbol let_class::Type(){return Object;}
 Symbol plus_class::Type(){
-    if(e1->Type()!=e2->Type())
+    if(e1->Type()!=Int || e2->Type()!=Int){
+        type=Object;
         classtable->semant_error(curr_class->get_filename(),this)<<"non-"<<e1->Type()<<" arguments: "<<e1->Type()<<" + "<<e2->Type()<<std::endl;
-    else
-        return e1->Type();
+    }
+    else  type=Int;
+    return type;
 }
 Symbol sub_class::Type(){return Object;}
 Symbol mul_class::Type(){return Object;}
