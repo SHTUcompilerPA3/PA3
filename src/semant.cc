@@ -347,12 +347,34 @@ void program_class::construct_methodtables(){
         for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
              Feature curr_feature = curr_features->nth(j);
              if(curr_feature->ismethod()){
-                if(methodtables[name].probe(curr_feature->GetName())==NULL)
-                    curr_feature->AddToMethodTable(name);
-                else 
-                    classtable->semant_error(curr_class->get_filename(),curr_feature) << "Method "<<curr_feature->GetName()<<" is multiply defined." << std::endl;
+                curr_feature->AddToMethodTable(name);
              }
         }
+    }
+    for (int i = classes->first(); classes->more(i); i = classes->next(i)) {
+        curr_class = classes->nth(i);
+
+        // Get the inheritance path, add all the attributes.
+        // std::list<Symbol> path = classtable->GetInheritancePath(curr_class->GetName());
+        // for (std::list<Symbol>::iterator iter = path.begin(); iter != path.end(); iter++) {
+        //     curr_class = classtable->m_classes[*iter];
+            Features curr_features = curr_class->GetFeatures();
+            attribtable.enterscope();
+            for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
+                Feature curr_feature = curr_features->nth(j);
+                curr_feature->AddToAttributeTable(curr_class->GetName());
+            }
+        // }
+        
+        curr_class = classes->nth(i);
+        //Features curr_features = curr_class->GetFeatures();
+
+        // Check all features.
+
+
+        // for (int j = 0; j < path.size(); ++j) {
+             attribtable.exitscope();
+        // }
     }
     if (classtable->errors()) {
         cerr << "Compilation halted due to static semantic errors." << endl;
@@ -360,16 +382,61 @@ void program_class::construct_methodtables(){
     }
 }
 
-void method_class::AddToMethodTable(Symbol class_name) {methodtables[class_name].addid(name, new method_class(copy_Symbol(name), formals->copy_list(), copy_Symbol(return_type), expr->copy_Expression()));}
+/*add the current method to method table, can detect multiply-defined method in one class.
+contributor: youch
+*/
+void method_class::AddToMethodTable(Symbol class_name) {
+    if(methodtables[name].probe(this->GetName())==NULL)
+        methodtables[class_name].addid(name, new method_class(copy_Symbol(name), formals->copy_list(), copy_Symbol(return_type), expr->copy_Expression()));
+    else 
+        classtable->semant_error(curr_class->get_filename(),this) << "Method "<<this->GetName()<<" is multiply defined." << std::endl;
+}
+
+/*add the current attribute to method table, can detect multiply-defined attribute in one class.
+contributor: youch
+*/
 void attr_class::AddToAttributeTable(Symbol class_name) {
     if (name == self) {
-        classtable->semant_error(curr_class) << "Error! 'self' cannot be the name of an attribute in class " << curr_class->GetName() << std::endl;
+        classtable->semant_error(curr_class->get_filename(),this) << "'self' cannot be the name of an attribute." << curr_class->GetName() << std::endl;
+        return;
     }
     if (attribtable.lookup(name) != NULL) {
-        classtable->semant_error(curr_class) << "Error! attribute '" << name << "' already exists!" << std::endl;
+        classtable->semant_error(curr_class->get_filename(),this) << "Attribute " << name << " is multiply defined in class." << std::endl;
         return;
     }
 
     attribtable.addid(name, new Symbol(type_decl));
 }
 
+/*type calculator for all type
+assign to: chenrong
+*/
+Symbol assign_class::Type(){}
+Symbol static_dispatch_class::Type(){}
+Symbol dispatch_class::Type(){}
+Symbol cond_class::Type(){}
+Symbol loop_class::Type(){}
+Symbol typcase_class::Type(){}
+Symbol block_class::Type(){}
+Symbol let_class::Type(){}
+Symbol plus_class::Type(){
+    if(e1->Type()!=e2->Type())
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-"<<e1->Type()<<" arguments: "<<e1->Type()<<" + "<<e2->Type()<<std::endl;
+    else
+        return e1->Type();
+}
+Symbol sub_class::Type(){}
+Symbol mul_class::Type(){}
+Symbol divide_class::Type(){}
+Symbol neg_class::Type(){}
+Symbol lt_class::Type(){}
+Symbol eq_class::Type(){}
+Symbol leq_class::Type(){}
+Symbol comp_class::Type(){}
+Symbol int_const_class::Type(){return Int;}
+Symbol bool_const_class::Type(){}
+Symbol string_const_class::Type(){}
+Symbol new__class::Type(){return type_name;}
+Symbol isvoid_class::Type(){return Bool;}
+Symbol no_expr_class::Type(){}
+Symbol object_class::Type(){}
