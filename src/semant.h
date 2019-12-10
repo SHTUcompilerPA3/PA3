@@ -36,7 +36,8 @@ public:
   /*a container to store classes*/
   std::map<Symbol, Class_> m_classes;
 
-  std::list<Symbol> GetInheritancePath(Symbol);
+  std::list<Symbol> GetAllParents(Symbol);
+  bool IsSubclass(Symbol, Symbol);
 };
 
 
