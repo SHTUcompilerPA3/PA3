@@ -37,6 +37,7 @@ public:
   std::map<Symbol, Class_> m_classes;
 
   std::list<Symbol> GetAllParents(Symbol);
+  bool IsSubclass(Symbol, Symbol);
 };
 
 

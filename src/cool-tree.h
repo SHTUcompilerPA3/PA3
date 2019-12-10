@@ -151,6 +151,7 @@ public:
    Program copy_Program();
    void dump(ostream& stream, int n);
    void construct_methodtables();
+   void checkinheritedmethods();
 
 #ifdef Program_SHARED_EXTRAS
    Program_SHARED_EXTRAS

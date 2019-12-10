@@ -332,6 +332,7 @@ void program_class::semant()
 
     /* construct the method table, detect method semantic errors in one class*/
     construct_methodtables();
+    checkinheritedmethods();
     //TODO:
     //(1) Pass through every method in every class, construct the methodtables and detect method semantic errors(Solved).
     //(2) Pass through every class, construct the symboltables, then check semantic errors in methods and decorate the AST.(Solved)
@@ -390,6 +391,61 @@ void program_class::construct_methodtables(){
     }
 }
 
+
+void program_class::checkinheritedmethods(){
+    for (std::map<Symbol, Class_>::iterator iter = classtable->m_classes.begin(); iter != classtable->m_classes.end(); ++iter) {
+        
+        // For some class, grab all its methods.
+        Symbol class_name = iter->first;
+        curr_class = classtable->m_classes[class_name];
+
+        Features curr_features = classtable->m_classes[class_name]->GetFeatures();
+
+        for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
+            
+            // We are checking one method of a class.
+            Feature curr_method = curr_features->nth(j);
+
+            if (curr_method->isattribute()) {
+                continue;
+            }
+
+            Formals curr_formals = ((method_class*)(curr_method))->GetFormals();
+            
+            std::list<Symbol> path = classtable->GetAllParents(class_name);
+            // We are checking every method with the same name in the ancestors
+            for (std::list<Symbol>::reverse_iterator iter = path.rbegin(); iter != path.rend(); ++iter) {
+                
+                Symbol ancestor_name = *iter;
+                method_class* method = methodtables[ancestor_name].lookup(curr_method->GetName());
+                
+                if (method != NULL) {
+                    // A method is found.
+                    Formals formals = method->GetFormals();
+                    if(curr_method->GetType()!=method->GetType()){
+                        classtable->semant_error(curr_class->get_filename(),curr_method) << "In redefined method "<<curr_method->GetName()<<", return type "<<curr_method->GetType()<<" is different from original return type "<<method->GetType()<<"." << std::endl;
+                    }
+
+                    int k1 = formals->first(), k2 = curr_formals->first();
+                    for (; formals->more(k1) && curr_formals->more(k2); k1 = formals->next(k1), k2 = curr_formals->next(k2)){}
+
+                    if (formals->more(k1) || curr_formals->more(k2)) {
+                        classtable->semant_error(curr_class->get_filename(),curr_method) << "Incompatible number of formal parameters in redefined method "<<curr_method->GetName()<<"." << std::endl;
+                    }
+                    k1 = formals->first();
+                    k2 = curr_formals->first();
+                    for (; formals->more(k1) && curr_formals->more(k2); k1 = formals->next(k1), k2 = curr_formals->next(k2)) {
+                        if (formals->nth(k1)->GetType() != curr_formals->nth(k2)->GetType()) {
+                            classtable->semant_error(curr_class->get_filename(),curr_formals->nth(k2)) << "In redefined method init, parameter type "<<curr_formals->nth(k2)->GetType()<<" is different from original type " << formals->nth(k1)->GetType() << std::endl;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 /*add the current method to method table, can detect multiply-defined method in one class.
 contributor: youch
 */
@@ -440,38 +496,57 @@ std::list<Symbol> ClassTable::GetAllParents(Symbol type) {
     return parents;
 }
 
+bool ClassTable::IsSubclass(Symbol ancestor, Symbol child) {
+    if (ancestor == SELF_TYPE) {
+        return child == SELF_TYPE;
+    }
+
+    if (child == SELF_TYPE) {
+        child = curr_class->GetName();
+    }
+
+    for (; child != No_class; child = m_classes.find(child)->second->GetParent()) {
+        if (child == ancestor) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 /*explore each feature, calculate the type of every expreesion, check semantic errors, decorate the AST
 contributor: youch
 */
 void method_class::Explore() {
+    attribtable.enterscope();
+    std::set<Symbol> formal_names;
+    for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
+        Symbol type = formals->nth(i)->GetType();
+        if (formals->nth(i)->GetName() == self) {
+            classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "'self' cannot be the name of a formal parameter." << std::endl;
+        }
+        if (classtable->m_classes.find(type) == classtable->m_classes.end()) {
+            classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "Class "<<type<<" of formal parameter "<<formals->nth(i)->GetName()<<" is undefined." << std::endl;
+        }
+
+        Symbol formal_name = formals->nth(i)->GetName();
+        if (formal_names.find(formal_name) != formal_names.end()) {
+            classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "Formal parameter "<<formal_name<<" is multiply defined." << std::endl;
+        } else {
+            formal_names.insert(formal_name);
+        }
+
+        attribtable.addid(formals->nth(i)->GetName(), new Symbol(formals->nth(i)->GetType()));
+    }
 
     if (classtable->m_classes.find(return_type) == classtable->m_classes.end() && return_type != SELF_TYPE) {
-        classtable->semant_error(curr_class) << "Error! return type " << return_type << " doesn't exist." << std::endl;
-    }
-    attribtable.enterscope();
-    std::set<Symbol> used_names;
-    for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
-        Symbol name = formals->nth(i)->GetName();
-        if (used_names.find(name) != used_names.end()) {
-            classtable->semant_error(curr_class) << "Error! formal name duplicated. " << std::endl;
-        } else {
-            used_names.insert(name);
-        }
-
-        Symbol type = formals->nth(i)->GetType();
-        if (classtable->m_classes.find(type) == classtable->m_classes.end()) {
-            classtable->semant_error(curr_class) << "Error! Cannot find class " << type << std::endl;
-        }
-        if (formals->nth(i)->GetName() == self) {
-            classtable->semant_error(curr_class) << "Error! self in formal " << std::endl;
-        }
-        attribtable.addid(formals->nth(i)->GetName(), new Symbol(formals->nth(i)->GetType()));
+        classtable->semant_error(curr_class->get_filename(),this) << "Undefined return type " << return_type << " in method "<<name<<"." << std::endl;
     }
     
     Symbol expr_type = expr->Type();
-    // if (classtable->CheckInheritance(return_type, expr_type) == false) {
-    //     classtable->semant_error(curr_class) << "Error! return type is not ancestor of expr type. " << std::endl;
-    // }
+    if (classtable->IsSubclass(return_type, expr_type) == false) {
+        classtable->semant_error(curr_class->get_filename(),this) << "Inferred return type "<<expr_type<<" of method "<<name<<" does not conform to declared return type "<<return_type<<"." << std::endl;
+    }
     attribtable.exitscope();
 }
 void attr_class::Explore() {
