@@ -443,8 +443,9 @@ void program_class::checkinheritedmethods(){
 contributor: youch
 */
 void method_class::AddToMethodTable(Symbol class_name) {
-    if(methodtables[class_name].probe(this->GetName())==NULL)
+    if(methodtables[class_name].probe(this->GetName())==NULL){
         methodtables[class_name].addid(name, new method_class(copy_Symbol(name), formals->copy_list(), copy_Symbol(return_type), expr->copy_Expression()));
+    }
     else 
         classtable->semant_error(curr_class->get_filename(),this) << "Method "<<this->GetName()<<" is multiply defined." << std::endl;
 }
@@ -549,6 +550,18 @@ void attr_class::Explore() {
 }
 
 
+Symbol classtable::find_lub(Symbol t1,Symbol t2){
+    Symbol lub_type;
+    std::list<Symbol> path = classtable->GetAllParents(t1);
+    for (std::list<Symbol>::reverse_iterator iter = path.rbegin(); iter != path.rend(); ++iter){
+        if (classtable->IsSubclass(*iter,t2)){
+            lub_type = *iter;
+            break;            
+        }
+    }
+    return lub_type;
+}
+
 
 /*expression calculator for all type
 assign to: chenrong
@@ -569,11 +582,111 @@ Symbol assign_class::Type(){
     type = rhs;
     return type;
 }
-Symbol static_dispatch_class::Type(){return Object;}
-Symbol dispatch_class::Type(){return Object;}
-Symbol cond_class::Type(){return Object;}
-Symbol loop_class::Type(){return Object;}
-Symbol typcase_class::Type(){return Object;}
+Symbol static_dispatch_class::Type(){
+    Symbol e0_type = expr->Type();
+    method_class* f = methodtables[e0_type].lookup(name);
+    if (0) {
+        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
+        type = Object;
+        return type;
+    }
+    method_class* method = methodtables[e0_type].lookup(name);
+    if (method == NULL){
+        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
+        type = Object;
+        return type;
+    }
+    for (int i = actual->first(); actual->more(i); i = actual->next(i)){
+        Symbol actual_type = actual->nth(i)->Type();
+        Symbol formal_type = method->GetFormals()->nth(i)->GetType();
+        if (method != NULL){
+            Symbol Symbol_type = method->GetFormals()->nth(i)->GetType();
+            if (!classtable->IsSubclass(formal_type, actual_type)){
+                classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
+            type = Object;
+            return type;
+            }
+        }
+    }
+}
+Symbol dispatch_class::Type(){
+    Symbol e0_type = expr->Type();
+    method_class* f = NULL;
+    f=methodtables[e0_type].lookup(name);
+    if (f==NULL) {
+        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
+        type = Object;
+        return type;
+    }
+    std::list<Symbol> path = classtable->GetAllParents(e0_type);
+    method_class* method = NULL;
+    for (std::list<Symbol>::iterator iter = path.begin(); iter != path.end(); ++iter){
+        if ((method = methodtables[*iter].lookup(name)) != NULL){
+            break;
+        }
+    }
+    if (method == NULL){
+        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
+        type = Object;
+        return type;
+    }
+    for (int i = actual->first(); actual->more(i); i = actual->next(i)){
+        Symbol actual_type = actual->nth(i)->Type();
+        Symbol formal_type = method->GetFormals()->nth(i)->GetType();
+        if (method != NULL){
+            Symbol Symbol_type = method->GetFormals()->nth(i)->GetType();
+            if (!classtable->IsSubclass(formal_type, actual_type)){
+                classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
+            type = Object;
+            return type;
+           }
+        }
+    }
+}
+Symbol cond_class::Type(){
+    Symbol cond = pred->Type();
+    if(cond != Bool){
+        classtable->semant_error(curr_class->get_filename(),this) << "If condition does not have type Bool." << std::endl;
+    }
+    Symbol e1_type = then_exp->Type();
+    Symbol e2_type = else_exp->Type();
+    return classtable->find_lub(e1_type,e2_type);
+}
+Symbol loop_class::Type(){
+    Symbol cond = pred->Type();
+    if(cond != Bool){
+        classtable->semant_error(curr_class->get_filename(),this) << "Loop condition does not have type Bool." << std::endl;
+    }
+    body->Type();
+    return Object;
+}
+Symbol typcase_class::Type(){
+    Symbol expr_type = expr->Type();
+    Case branch;
+    std::list<Symbol> bran_types;
+    std::list<Symbol> bran_type_decl;
+    for (int i=cases->first(); cases->more(i); i = cases->next(i)){
+        branch = cases->nth(i);
+        Symbol case_type = branch->GetTypeDecl();
+        bran_types.push_front(case_type);
+        bran_type_decl.push_front(((branch_class *)branch)->GetTypeDecl());
+    }
+    for (int i = 0; i < bran_types.size() - 1; ++i) {
+        for (int j = i + 1; j < bran_types.size(); ++j) {
+            if (bran_type_decl[i] == bran_type_decl[j]) {
+                classtable->semant_error(curr_class) << "Error! Two branches have same type." << std::endl;
+            }
+        }
+    }
+
+    type = bran_types[0];
+    for (int i = 1; i < bran_types.size(); ++i) {
+        type = classtable->find_lub(type, bran_types[i]);
+    }
+    return type;
+}
+
+}
 Symbol block_class::Type(){
     for (int i = body->first(); body->more(i); i = body->next(i)) {
         type = body->nth(i)->Type();
