@@ -333,10 +333,7 @@ void program_class::semant()
     /* construct the method table, detect method semantic errors in one class*/
     construct_methodtables();
     checkinheritedmethods();
-    //TODO:
-    //(1) Pass through every method in every class, construct the methodtables and detect method semantic errors(Solved).
-    //(2) Pass through every class, construct the symboltables, then check semantic errors in methods and decorate the AST.(Solved)
-    //(3) detect method semantic errors while inheriting.
+
 
     /* construct the attribute table, explore and decorate the AST*/
     for (int i = classes->first(); classes->more(i); i = classes->next(i)) {
@@ -395,7 +392,6 @@ void program_class::construct_methodtables(){
 void program_class::checkinheritedmethods(){
     for (std::map<Symbol, Class_>::iterator iter = classtable->m_classes.begin(); iter != classtable->m_classes.end(); ++iter) {
         
-        // For some class, grab all its methods.
         Symbol class_name = iter->first;
         curr_class = classtable->m_classes[class_name];
 
@@ -403,7 +399,6 @@ void program_class::checkinheritedmethods(){
 
         for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
             
-            // We are checking one method of a class.
             Feature curr_method = curr_features->nth(j);
 
             if (curr_method->isattribute()) {
@@ -413,14 +408,12 @@ void program_class::checkinheritedmethods(){
             Formals curr_formals = ((method_class*)(curr_method))->GetFormals();
             
             std::list<Symbol> path = classtable->GetAllParents(class_name);
-            // We are checking every method with the same name in the ancestors
             for (std::list<Symbol>::reverse_iterator iter = path.rbegin(); iter != path.rend(); ++iter) {
                 
                 Symbol ancestor_name = *iter;
                 method_class* method = methodtables[ancestor_name].lookup(curr_method->GetName());
                 
                 if (method != NULL) {
-                    // A method is found.
                     Formals formals = method->GetFormals();
                     if(curr_method->GetType()!=method->GetType()){
                         classtable->semant_error(curr_class->get_filename(),curr_method) << "In redefined method "<<curr_method->GetName()<<", return type "<<curr_method->GetType()<<" is different from original return type "<<method->GetType()<<"." << std::endl;
@@ -488,7 +481,6 @@ std::list<Symbol> ClassTable::GetAllParents(Symbol type) {
 
     std::list<Symbol> parents;
 
-    // note that Object's father is No_class
     for (; type != No_class; type = m_classes[type]->GetParent()) {
         parents.push_front(type); 
     }
@@ -550,44 +542,168 @@ void method_class::Explore() {
     attribtable.exitscope();
 }
 void attr_class::Explore() {
-    if (init->Type() != type_decl) {
-        classtable->semant_error(curr_class->get_filename(),this) << "Inferred type "<<init->Type()<<" of initialization of attribute "<<name<<" does not conform to declared type "<<type_decl<<"." << std::endl;
+    Symbol rhs_type = init->Type();
+    if (rhs_type != No_type && !classtable->IsSubclass(type_decl,rhs_type)) {
+        classtable->semant_error(curr_class->get_filename(),this) << "Inferred type "<<rhs_type<<" of initialization of attribute "<<name<<" does not conform to declared type "<<type_decl<<"." << std::endl;
     }
 }
 
 
 
-/*type calculator for all type
+/*expression calculator for all type
 assign to: chenrong
 */
-Symbol assign_class::Type(){return Object;}
+Symbol assign_class::Type(){
+    Symbol* lhs = attribtable.lookup(name);
+    Symbol rhs = expr->Type();
+    if (lhs == NULL) {
+        classtable->semant_error(curr_class->get_filename(),this) << "Assignment to undeclared variable "<< name <<"." << std::endl;
+        type = Object;
+        return type;
+    }
+    if (classtable->IsSubclass(*lhs, rhs) == false) {
+        classtable->semant_error(curr_class->get_filename(),this) << "Type "<<rhs<<" of assigned expression does not conform to declared type "<<*lhs<<" of identifier "<<name<<"." << std::endl;
+        type = Object;
+        return type;
+    }
+    type = rhs;
+    return type;
+}
 Symbol static_dispatch_class::Type(){return Object;}
 Symbol dispatch_class::Type(){return Object;}
 Symbol cond_class::Type(){return Object;}
 Symbol loop_class::Type(){return Object;}
 Symbol typcase_class::Type(){return Object;}
-Symbol block_class::Type(){return Object;}
+Symbol block_class::Type(){
+    for (int i = body->first(); body->more(i); i = body->next(i)) {
+        type = body->nth(i)->Type();
+    }
+    return type;
+}
 Symbol let_class::Type(){return Object;}
 Symbol plus_class::Type(){
-    if(e1->Type()!=Int || e2->Type()!=Int){
-        type=Object;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" + "<<e2->Type()<<std::endl;
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
+        type=Int;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" + "<<e2_type<<std::endl;
     }
     else  type=Int;
     return type;
 }
-Symbol sub_class::Type(){return Object;}
-Symbol mul_class::Type(){return Object;}
-Symbol divide_class::Type(){return Object;}
-Symbol neg_class::Type(){return Object;}
-Symbol lt_class::Type(){return Object;}
-Symbol eq_class::Type(){return Object;}
-Symbol leq_class::Type(){return Object;}
-Symbol comp_class::Type(){return Object;}
-Symbol int_const_class::Type(){return Int;}
-Symbol bool_const_class::Type(){return Object;}
-Symbol string_const_class::Type(){return Object;}
-Symbol new__class::Type(){return type_name;}
-Symbol isvoid_class::Type(){return Bool;}
-Symbol no_expr_class::Type(){return Object;}
-Symbol object_class::Type(){return Object;}
+Symbol sub_class::Type(){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
+        type=Int;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" - "<<e2_type<<std::endl;
+    }
+    else  type=Int;
+    return type;
+}
+Symbol mul_class::Type(){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
+        type=Int;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" * "<<e2_type<<std::endl;
+    }
+    else  type=Int;
+    return type;
+}
+Symbol divide_class::Type(){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
+        type=Int;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" / "<<e2_type<<std::endl;
+    }
+    else  type=Int;
+    return type;
+}
+Symbol neg_class::Type(){
+    Symbol e1_type =e1->Type();
+    if(e1_type!=Int){
+        type=Int;
+        classtable->semant_error(curr_class->get_filename(),this)<<"Argument of '~' has type "<<e1_type<<" instead of Int." <<std::endl;
+    }
+    else  type=Int;
+    return type;
+}
+Symbol lt_class::Type(){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
+        type=Bool;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" < "<<e2_type<<std::endl;
+    }
+    else  type=Bool;
+    return type;
+}
+Symbol eq_class::Type(){
+    Symbol e1_type = e1->Type();
+    Symbol e2_type = e2->Type();
+    if (e1_type == Int || e2_type == Int || e1_type == Bool || e2_type == Bool || e1_type == Str || e2_type == Str) {
+        if (e1_type != e2_type) {
+            classtable->semant_error(curr_class->get_filename(),this) << "Illegal comparison with a basic type." << std::endl;
+            type = Bool;
+        } else {
+            type = Bool;
+        }
+    } else {
+        type = Bool;
+    }
+    return type;
+}
+Symbol leq_class::Type(){
+    Symbol e1_type = e1->Type();
+    Symbol e2_type = e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
+        type=Bool;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" <= "<<e2_type<<std::endl;
+    }
+    else  type=Bool;
+    return type;
+}
+Symbol comp_class::Type(){
+    Symbol e1_type = e1->Type();
+    if(e1_type!=Bool){
+        type=Bool;
+        classtable->semant_error(curr_class->get_filename(),this)<<"Argument of 'not' has type "<<e1_type<<" instead of Bool."<<std::endl;
+    }
+    else  type=Bool;
+    return type;
+}
+Symbol int_const_class::Type(){type=Int;return type;}
+Symbol bool_const_class::Type(){type=Bool;return type;}
+Symbol string_const_class::Type(){type=Str;return type;}
+Symbol new__class::Type(){
+    if (type_name != SELF_TYPE && classtable->m_classes.find(type_name) == classtable->m_classes.end()) {
+        type=Object;
+        classtable->semant_error(curr_class->get_filename(),this) << "'new' used with undefined class "<< type_name <<"." << std::endl;
+    }
+    type = type_name;
+    return type;
+}
+Symbol isvoid_class::Type(){
+    e1->Type();
+    type = Bool;
+    return type;
+}
+Symbol no_expr_class::Type(){return No_type;}
+Symbol object_class::Type(){
+    if (name == self) {
+        type = SELF_TYPE;
+        return type;
+    }
+
+    Symbol* id_type = attribtable.lookup(name);
+    if (id_type == NULL) {
+        type = Object;
+        classtable->semant_error(curr_class->get_filename(),this) << "Undeclared identifier "<<name<<"." << std::endl;
+    } else {
+        type = *id_type;
+    }
+    
+    return type;
+}
