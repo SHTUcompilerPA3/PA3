@@ -333,10 +333,7 @@ void program_class::semant()
     /* construct the method table, detect method semantic errors in one class*/
     construct_methodtables();
     checkinheritedmethods();
-    //TODO:
-    //(1) Pass through every method in every class, construct the methodtables and detect method semantic errors(Solved).
-    //(2) Pass through every class, construct the symboltables, then check semantic errors in methods and decorate the AST.(Solved)
-    //(3) detect method semantic errors while inheriting.
+
 
     /* construct the attribute table, explore and decorate the AST*/
     for (int i = classes->first(); classes->more(i); i = classes->next(i)) {
@@ -395,7 +392,6 @@ void program_class::construct_methodtables(){
 void program_class::checkinheritedmethods(){
     for (std::map<Symbol, Class_>::iterator iter = classtable->m_classes.begin(); iter != classtable->m_classes.end(); ++iter) {
         
-        // For some class, grab all its methods.
         Symbol class_name = iter->first;
         curr_class = classtable->m_classes[class_name];
 
@@ -403,7 +399,6 @@ void program_class::checkinheritedmethods(){
 
         for (int j = curr_features->first(); curr_features->more(j); j = curr_features->next(j)) {
             
-            // We are checking one method of a class.
             Feature curr_method = curr_features->nth(j);
 
             if (curr_method->isattribute()) {
@@ -413,14 +408,12 @@ void program_class::checkinheritedmethods(){
             Formals curr_formals = ((method_class*)(curr_method))->GetFormals();
             
             std::list<Symbol> path = classtable->GetAllParents(class_name);
-            // We are checking every method with the same name in the ancestors
             for (std::list<Symbol>::reverse_iterator iter = path.rbegin(); iter != path.rend(); ++iter) {
                 
                 Symbol ancestor_name = *iter;
                 method_class* method = methodtables[ancestor_name].lookup(curr_method->GetName());
                 
                 if (method != NULL) {
-                    // A method is found.
                     Formals formals = method->GetFormals();
                     if(curr_method->GetType()!=method->GetType()){
                         classtable->semant_error(curr_class->get_filename(),curr_method) << "In redefined method "<<curr_method->GetName()<<", return type "<<curr_method->GetType()<<" is different from original return type "<<method->GetType()<<"." << std::endl;
@@ -551,7 +544,7 @@ void method_class::Explore() {
 void attr_class::Explore() {
     Symbol rhs_type = init->Type();
     if (rhs_type != No_type && !classtable->IsSubclass(type_decl,rhs_type)) {
-        classtable->semant_error(curr_class->get_filename(),this) << "Inferred type "<<init->Type()<<" of initialization of attribute "<<name<<" does not conform to declared type "<<type_decl<<"." << std::endl;
+        classtable->semant_error(curr_class->get_filename(),this) << "Inferred type "<<rhs_type<<" of initialization of attribute "<<name<<" does not conform to declared type "<<type_decl<<"." << std::endl;
     }
 }
 
@@ -589,49 +582,60 @@ Symbol block_class::Type(){
 }
 Symbol let_class::Type(){return Object;}
 Symbol plus_class::Type(){
-    if(e1->Type()!=Int || e2->Type()!=Int){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
         type=Int;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" + "<<e2->Type()<<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" + "<<e2_type<<std::endl;
     }
     else  type=Int;
     return type;
 }
 Symbol sub_class::Type(){
-    if(e1->Type()!=Int || e2->Type()!=Int){
-        type=Object;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" - "<<e2->Type()<<std::endl;
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
+        type=Int;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" - "<<e2_type<<std::endl;
     }
     else  type=Int;
     return type;
 }
 Symbol mul_class::Type(){
-    if(e1->Type()!=Int || e2->Type()!=Int){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
         type=Int;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" * "<<e2->Type()<<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" * "<<e2_type<<std::endl;
     }
     else  type=Int;
     return type;
 }
 Symbol divide_class::Type(){
-    if(e1->Type()!=Int || e2->Type()!=Int){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
         type=Int;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" / "<<e2->Type()<<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" / "<<e2_type<<std::endl;
     }
     else  type=Int;
     return type;
 }
 Symbol neg_class::Type(){
-    if(e1->Type()!=Int){
+    Symbol e1_type =e1->Type();
+    if(e1_type!=Int){
         type=Int;
-        classtable->semant_error(curr_class->get_filename(),this)<<"Argument of '~' has type "<<e1->Type()<<" instead of Int." <<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"Argument of '~' has type "<<e1_type<<" instead of Int." <<std::endl;
     }
     else  type=Int;
     return type;
 }
 Symbol lt_class::Type(){
-    if(e1->Type()!=Int || e2->Type()!=Int){
+    Symbol e1_type =e1->Type();
+    Symbol e2_type =e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
         type=Bool;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" < "<<e2->Type()<<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" < "<<e2_type<<std::endl;
     }
     else  type=Bool;
     return type;
@@ -652,17 +656,20 @@ Symbol eq_class::Type(){
     return type;
 }
 Symbol leq_class::Type(){
-    if(e1->Type()!=Int || e2->Type()!=Int){
+    Symbol e1_type = e1->Type();
+    Symbol e2_type = e2->Type();
+    if(e1_type!=Int || e2_type!=Int){
         type=Bool;
-        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1->Type()<<" <= "<<e2->Type()<<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" <= "<<e2_type<<std::endl;
     }
     else  type=Bool;
     return type;
 }
 Symbol comp_class::Type(){
-    if(e1->Type()!=Bool){
+    Symbol e1_type = e1->Type();
+    if(e1_type!=Bool){
         type=Bool;
-        classtable->semant_error(curr_class->get_filename(),this)<<"Argument of 'not' has type "<<e1->Type()<<" instead of Bool."<<std::endl;
+        classtable->semant_error(curr_class->get_filename(),this)<<"Argument of 'not' has type "<<e1_type<<" instead of Bool."<<std::endl;
     }
     else  type=Bool;
     return type;
