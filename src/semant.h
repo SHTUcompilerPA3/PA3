@@ -38,6 +38,7 @@ public:
 
   std::list<Symbol> GetAllParents(Symbol);
   bool IsSubclass(Symbol, Symbol);
+  Symbol find_lub(Symbol,Symbol);
 };
 
 
