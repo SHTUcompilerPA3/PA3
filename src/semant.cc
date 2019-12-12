@@ -550,7 +550,7 @@ void attr_class::Explore() {
 }
 
 
-Symbol classtable::find_lub(Symbol t1,Symbol t2){
+Symbol ClassTable::find_lub(Symbol t1,Symbol t2){
     Symbol lub_type;
     std::list<Symbol> path = classtable->GetAllParents(t1);
     for (std::list<Symbol>::reverse_iterator iter = path.rbegin(); iter != path.rend(); ++iter){
@@ -584,15 +584,14 @@ Symbol assign_class::Type(){
 }
 Symbol static_dispatch_class::Type(){
     Symbol e0_type = expr->Type();
-    method_class* f = methodtables[e0_type].lookup(name);
-    if (0) {
-        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
-        type = Object;
+    if(!classtable->IsSubclass(type_name,e0_type)){
+        classtable->semant_error(curr_class->get_filename(),this) <<"Expression type "<<e0_type<<" does not conform to declared static dispatch type "<<type_name<<"." << std::endl;
+        type=Object;
         return type;
     }
-    method_class* method = methodtables[e0_type].lookup(name);
+    method_class* method = methodtables[type_name].lookup(name);
     if (method == NULL){
-        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
+        classtable->semant_error(curr_class->get_filename(),this) << "Static dispatch to undefined method "<< name <<"." << std::endl;
         type = Object;
         return type;
     }
@@ -602,46 +601,40 @@ Symbol static_dispatch_class::Type(){
         if (method != NULL){
             Symbol Symbol_type = method->GetFormals()->nth(i)->GetType();
             if (!classtable->IsSubclass(formal_type, actual_type)){
-                classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
-            type = Object;
-            return type;
-            }
-        }
-    }
-}
-Symbol dispatch_class::Type(){
-    Symbol e0_type = expr->Type();
-    method_class* f = NULL;
-    f=methodtables[e0_type].lookup(name);
-    if (f==NULL) {
-        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
-        type = Object;
-        return type;
-    }
-    std::list<Symbol> path = classtable->GetAllParents(e0_type);
-    method_class* method = NULL;
-    for (std::list<Symbol>::iterator iter = path.begin(); iter != path.end(); ++iter){
-        if ((method = methodtables[*iter].lookup(name)) != NULL){
-            break;
-        }
-    }
-    if (method == NULL){
-        classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
-        type = Object;
-        return type;
-    }
-    for (int i = actual->first(); actual->more(i); i = actual->next(i)){
-        Symbol actual_type = actual->nth(i)->Type();
-        Symbol formal_type = method->GetFormals()->nth(i)->GetType();
-        if (method != NULL){
-            Symbol Symbol_type = method->GetFormals()->nth(i)->GetType();
-            if (!classtable->IsSubclass(formal_type, actual_type)){
-                classtable->semant_error(curr_class->get_filename(),this) << "........."<< name <<"." << std::endl;
-            type = Object;
+                classtable->semant_error(curr_class->get_filename(),this) << "In call of method "<<name<<", type "<<actual_type<<" of parameter "<<method->GetFormals()->nth(i)->GetName()<<" does not conform to declared type "<<formal_type<<"."<< std::endl;
             return type;
            }
         }
     }
+    return type;
+}
+Symbol dispatch_class::Type(){
+    Symbol e0_type = expr->Type();
+    method_class* method = methodtables[e0_type].lookup(name);
+    std::list<Symbol> path = classtable->GetAllParents(e0_type);
+    for (std::list<Symbol>::iterator iter = path.begin(); iter != path.end(); ++iter){
+        if ((method = methodtables[*iter].lookup(name)) != NULL){
+            type=method->GetType();
+            break;
+        }
+    }
+    if (method == NULL){
+        classtable->semant_error(curr_class->get_filename(),this) << "Dispatch to undefined method "<< name <<"." << std::endl;
+        type = Object;
+        return type;
+    }
+    for (int i = actual->first(); actual->more(i); i = actual->next(i)){
+        Symbol actual_type = actual->nth(i)->Type();
+        Symbol formal_type = method->GetFormals()->nth(i)->GetType();
+        if (method != NULL){
+            Symbol Symbol_type = method->GetFormals()->nth(i)->GetType();
+            if (!classtable->IsSubclass(formal_type, actual_type)){
+                classtable->semant_error(curr_class->get_filename(),this) << "In call of method "<<name<<", type "<<actual_type<<" of parameter "<<method->GetFormals()->nth(i)->GetName()<<" does not conform to declared type "<<formal_type<<"."<< std::endl;
+            return type;
+           }
+        }
+    }
+    return type;
 }
 Symbol cond_class::Type(){
     Symbol cond = pred->Type();
@@ -665,35 +658,67 @@ Symbol typcase_class::Type(){
     Case branch;
     std::list<Symbol> bran_types;
     std::list<Symbol> bran_type_decl;
+    bool error=false;
     for (int i=cases->first(); cases->more(i); i = cases->next(i)){
         branch = cases->nth(i);
-        Symbol case_type = branch->GetTypeDecl();
-        bran_types.push_front(case_type);
-        bran_type_decl.push_front(((branch_class *)branch)->GetTypeDecl());
-    }
-    for (int i = 0; i < bran_types.size() - 1; ++i) {
-        for (int j = i + 1; j < bran_types.size(); ++j) {
-            if (bran_type_decl[i] == bran_type_decl[j]) {
-                classtable->semant_error(curr_class) << "Error! Two branches have same type." << std::endl;
+        Symbol case_type = ((branch_class *)branch)->Getexpr()->Type();
+        Symbol case_type_dec = ((branch_class *)branch)->GetTypeDecl();
+        for (std::list<Symbol>::reverse_iterator i = bran_type_decl.rbegin(); i!=bran_type_decl.rend(); ++i) {
+        std::list<Symbol>::reverse_iterator j = i;
+        j++;
+        for (; j !=bran_type_decl.rend(); ++j) {
+            if (*i == *j) {
+                error=true;
+                classtable->semant_error(curr_class->get_filename(),branch) << "Duplicate branch Int in case statement." << std::endl;
             }
         }
     }
+        if(!error){
+            bran_types.push_front(case_type);
+            bran_type_decl.push_front(case_type_dec);
+        }
+        error=false;
+    }
 
-    type = bran_types[0];
-    for (int i = 1; i < bran_types.size(); ++i) {
-        type = classtable->find_lub(type, bran_types[i]);
+
+    type = *(bran_types.begin());
+    for (std::list<Symbol>::iterator i = bran_types.begin(); i!=bran_types.end(); ++i) {
+        type = classtable->find_lub(type, *i);
     }
     return type;
 }
 
-}
 Symbol block_class::Type(){
     for (int i = body->first(); body->more(i); i = body->next(i)) {
         type = body->nth(i)->Type();
     }
     return type;
 }
-Symbol let_class::Type(){return Object;}
+Symbol let_class::Type(){
+    attribtable.enterscope();
+
+    Symbol init_type = init->Type();
+    
+
+    if (init_type != No_type) {
+        if (classtable->IsSubclass(type_decl, init_type) == false) {
+            classtable->semant_error(curr_class->get_filename(),this) << "Inferred type "<<init_type<<" of initialization of "<<identifier<<" does not conform to identifier's declared type "<<type_decl<<"." << std::endl;
+        }
+    }
+
+    if (identifier == self) {
+        classtable->semant_error(curr_class->get_filename(),this) << "'self' cannot be bound in a 'let' expression." << std::endl;
+    }
+    else
+    {
+        attribtable.addid(identifier, new Symbol(type_decl));
+    }
+    
+
+    type = body->Type();
+    attribtable.exitscope();
+    return type;
+}
 Symbol plus_class::Type(){
     Symbol e1_type =e1->Type();
     Symbol e2_type =e2->Type();
