@@ -444,6 +444,26 @@ contributor: youch
 */
 void method_class::AddToMethodTable(Symbol class_name) {
     if(methodtables[class_name].probe(this->GetName())==NULL){
+        std::set<Symbol> formal_names;
+        for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
+            Symbol type = formals->nth(i)->GetType();
+            Symbol formal_name = formals->nth(i)->GetName();
+            if (formals->nth(i)->GetName() == self) {
+                classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "'self' cannot be the name of a formal parameter." << std::endl;
+            }
+            if (type == SELF_TYPE) {
+                classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "Formal parameter "<<formal_name<<" cannot have type SELF_TYPE." << std::endl;
+            }
+            if (classtable->m_classes.find(type) == classtable->m_classes.end() &&type != SELF_TYPE) {
+                classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "Class "<<type<<" of formal parameter "<<formals->nth(i)->GetName()<<" is undefined." << std::endl;
+                formals->nth(i)->SetType(Object);
+            }
+            if (formal_names.find(formal_name) != formal_names.end()) {
+                classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "Formal parameter "<<formal_name<<" is multiply defined." << std::endl;
+            } else {
+                formal_names.insert(formal_name);
+            }
+        }
         methodtables[class_name].addid(name, new method_class(copy_Symbol(name), formals->copy_list(), copy_Symbol(return_type), expr->copy_Expression()));
     }
     else 
@@ -514,21 +534,6 @@ void method_class::Explore() {
     attribtable.enterscope();
     std::set<Symbol> formal_names;
     for (int i = formals->first(); formals->more(i); i = formals->next(i)) {
-        Symbol type = formals->nth(i)->GetType();
-        if (formals->nth(i)->GetName() == self) {
-            classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "'self' cannot be the name of a formal parameter." << std::endl;
-        }
-        if (classtable->m_classes.find(type) == classtable->m_classes.end()) {
-            classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "Class "<<type<<" of formal parameter "<<formals->nth(i)->GetName()<<" is undefined." << std::endl;
-        }
-
-        Symbol formal_name = formals->nth(i)->GetName();
-        if (formal_names.find(formal_name) != formal_names.end()) {
-            classtable->semant_error(curr_class->get_filename(),formals->nth(i)) << "Formal parameter "<<formal_name<<" is multiply defined." << std::endl;
-        } else {
-            formal_names.insert(formal_name);
-        }
-
         attribtable.addid(formals->nth(i)->GetName(), new Symbol(formals->nth(i)->GetType()));
     }
 
@@ -569,6 +574,12 @@ assign to: chenrong
 Symbol assign_class::Type(){
     Symbol* lhs = attribtable.lookup(name);
     Symbol rhs = expr->Type();
+    if (name == self){
+        classtable->semant_error(curr_class->get_filename(),this) << "Cannot assign to 'self'." << std::endl;
+        classtable->semant_error(curr_class->get_filename(),this) << "Type "<<rhs<<" of assigned expression does not conform to declared type SELF_TYPE of identifier self." << std::endl;
+        type = curr_class->GetName();
+        return type;
+    }
     if (lhs == NULL) {
         classtable->semant_error(curr_class->get_filename(),this) << "Assignment to undeclared variable "<< name <<"." << std::endl;
         type = Object;
