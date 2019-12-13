@@ -296,6 +296,7 @@ public:
    Case copy_Case();
    void dump(ostream& stream, int n);
    Symbol GetTypeDecl(){return type_decl;};
+   Expression GetExpr(){return expr;};
 
 #ifdef Case_SHARED_EXTRAS
    Case_SHARED_EXTRAS

@@ -643,7 +643,8 @@ Symbol cond_class::Type(){
     }
     Symbol e1_type = then_exp->Type();
     Symbol e2_type = else_exp->Type();
-    return classtable->find_lub(e1_type,e2_type);
+    type = classtable->find_lub(e1_type,e2_type);
+    return type;
 }
 Symbol loop_class::Type(){
     Symbol cond = pred->Type();
@@ -651,7 +652,8 @@ Symbol loop_class::Type(){
         classtable->semant_error(curr_class->get_filename(),this) << "Loop condition does not have type Bool." << std::endl;
     }
     body->Type();
-    return Object;
+    type = Object;
+    return type;
 }
 Symbol typcase_class::Type(){
     Symbol expr_type = expr->Type();
@@ -661,7 +663,7 @@ Symbol typcase_class::Type(){
     bool error=false;
     for (int i=cases->first(); cases->more(i); i = cases->next(i)){
         branch = cases->nth(i);
-        Symbol case_type = ((branch_class *)branch)->Getexpr()->Type();
+        Symbol case_type = ((branch_class *)branch)->GetExpr()->Type();
         Symbol case_type_dec = ((branch_class *)branch)->GetTypeDecl();
         for (std::list<Symbol>::reverse_iterator i = bran_type_decl.rbegin(); i!=bran_type_decl.rend(); ++i) {
         std::list<Symbol>::reverse_iterator j = i;
@@ -743,20 +745,20 @@ Symbol mul_class::Type(){
     Symbol e1_type =e1->Type();
     Symbol e2_type =e2->Type();
     if(e1_type!=Int || e2_type!=Int){
-        type=Int;
+        type = Int;
         classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" * "<<e2_type<<std::endl;
     }
-    else  type=Int;
+    else  type = Int;
     return type;
 }
 Symbol divide_class::Type(){
     Symbol e1_type =e1->Type();
     Symbol e2_type =e2->Type();
     if(e1_type!=Int || e2_type!=Int){
-        type=Int;
+        type = Int;
         classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" / "<<e2_type<<std::endl;
     }
-    else  type=Int;
+    else  type = Int;
     return type;
 }
 Symbol neg_class::Type(){
@@ -765,7 +767,7 @@ Symbol neg_class::Type(){
         type=Int;
         classtable->semant_error(curr_class->get_filename(),this)<<"Argument of '~' has type "<<e1_type<<" instead of Int." <<std::endl;
     }
-    else  type=Int;
+    else  type = Int;
     return type;
 }
 Symbol lt_class::Type(){
@@ -775,7 +777,7 @@ Symbol lt_class::Type(){
         type=Bool;
         classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" < "<<e2_type<<std::endl;
     }
-    else  type=Bool;
+    else  type = Bool;
     return type;
 }
 Symbol eq_class::Type(){
@@ -800,24 +802,24 @@ Symbol leq_class::Type(){
         type=Bool;
         classtable->semant_error(curr_class->get_filename(),this)<<"non-Int arguments: "<<e1_type<<" <= "<<e2_type<<std::endl;
     }
-    else  type=Bool;
+    else  type = Bool;
     return type;
 }
 Symbol comp_class::Type(){
     Symbol e1_type = e1->Type();
     if(e1_type!=Bool){
-        type=Bool;
+        type = Bool;
         classtable->semant_error(curr_class->get_filename(),this)<<"Argument of 'not' has type "<<e1_type<<" instead of Bool."<<std::endl;
     }
-    else  type=Bool;
+    else  type = Bool;
     return type;
 }
-Symbol int_const_class::Type(){type=Int;return type;}
-Symbol bool_const_class::Type(){type=Bool;return type;}
-Symbol string_const_class::Type(){type=Str;return type;}
+Symbol int_const_class::Type(){type = Int; return type;}
+Symbol bool_const_class::Type(){type = Bool; return type;}
+Symbol string_const_class::Type(){type = Str; return type;}
 Symbol new__class::Type(){
     if (type_name != SELF_TYPE && classtable->m_classes.find(type_name) == classtable->m_classes.end()) {
-        type=Object;
+        type = Object;
         classtable->semant_error(curr_class->get_filename(),this) << "'new' used with undefined class "<< type_name <<"." << std::endl;
     }
     type = type_name;
