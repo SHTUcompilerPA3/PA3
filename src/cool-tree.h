@@ -78,6 +78,7 @@ public:
    virtual Formal copy_Formal() = 0;
    virtual Symbol GetType() = 0;
    virtual Symbol GetName() = 0;
+   virtual void SetType(Symbol t) = 0;
 
 #ifdef Formal_EXTRAS
    Formal_EXTRAS
@@ -271,6 +272,7 @@ public:
    void dump(ostream& stream, int n);
    Symbol GetType(){return type_decl;};
    Symbol GetName(){return name;};
+   void SetType(Symbol t){type_decl=t;};
 
 #ifdef Formal_SHARED_EXTRAS
    Formal_SHARED_EXTRAS
@@ -296,6 +298,7 @@ public:
    Case copy_Case();
    void dump(ostream& stream, int n);
    Symbol GetTypeDecl(){return type_decl;};
+   Expression GetExpr(){return expr;};
 
 #ifdef Case_SHARED_EXTRAS
    Case_SHARED_EXTRAS
